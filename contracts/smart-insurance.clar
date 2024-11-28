@@ -270,3 +270,39 @@
 ;; Get the current fund balance available for payouts
 (define-read-only (get-available-payout-fund)
   (ok (var-get insurance-fund)))
+
+;; Get the current size of the insurance pool
+(define-read-only (get-insurance-pool-size)
+  (ok (var-get insurance-fund)))
+
+;; Check if a user has enough funds in their insurance balance to make a claim
+(define-read-only (can-user-claim-insurance? (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (and (get is-active user-policy) 
+             (>= (get amount user-policy) u0)))))
+
+;; Get the current insurance premium rate as a decimal value (e.g., 0.05 for 5%)
+(define-read-only (get-insurance-premium-decimal)
+  (ok (/ (var-get insurance-premium) u100)))
+
+(define-read-only (get-user-policy-premium (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get price user-policy))))
+
+(define-read-only (can-add-more-funds? (user principal) (amount uint))
+  (let ((user-balance (default-to u0 (map-get? user-funding-balance user)))
+        (funding-limit (var-get max-funding-per-user)))
+    (ok (< (+ user-balance amount) funding-limit))))
+
+(define-read-only (get-remaining-insurance-fund)
+  (ok (var-get insurance-fund)))
+
+(define-read-only (has-exceeded-funding-limit? (user principal))
+  (let ((user-balance (default-to u0 (map-get? user-funding-balance user)))
+        (funding-limit (var-get max-funding-per-user)))
+    (ok (> user-balance funding-limit))))
+
+;; Check if a user has enough insurance balance to claim
+(define-read-only (has-sufficient-insurance? (user principal) (amount uint))
+  (let ((user-insurance (default-to u0 (map-get? user-insurance-balance user))))
+    (ok (>= user-insurance amount))))
