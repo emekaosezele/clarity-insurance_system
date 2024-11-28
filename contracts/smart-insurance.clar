@@ -380,3 +380,49 @@
 (define-read-only (get-total-fund)
   (ok (var-get insurance-fund)))
 
+;; Returns true if the user has enough balance to purchase insurance
+(define-read-only (is-user-eligible-for-insurance? (user principal))
+  (let ((balance (default-to u0 (map-get? user-funding-balance user))))
+    (ok (>= balance (var-get insurance-premium)))))
+
+;; Returns true if the contract has enough funds to process the claim
+(define-read-only (has-enough-funds-for-claims? (amount uint))
+  (ok (>= (var-get insurance-fund) amount)))
+
+;; Get the status of a user's insurance claim (active or pending)
+(define-read-only (get-insurance-claim-status (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get is-active policy))))
+
+;; Check if the total funding exceeds the maximum limit
+(define-read-only (is-fund-limit-exceeded)
+  (ok (> (var-get insurance-fund) (var-get fund-limit))))
+
+;; Get the number of active insurance policies for a user
+(define-read-only (get-user-active-policies-count (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (if (get is-active user-policy) 1 0))))
+
+;; Check if the insurance pool has enough funds to cover a payout
+(define-read-only (is-fund-sufficient-for-payout (amount uint))
+  (let ((payout-amount (calculate-payout amount)))
+    (ok (>= (var-get insurance-fund) payout-amount))))
+
+;; Get the percentage of insurance fund utilized
+(define-read-only (get-insurance-fund-utilization)
+  (let ((utilization (/ (var-get insurance-fund) (var-get fund-limit))))
+    (ok (* utilization u100))))
+
+;; Get the percentage of the insurance pool contributed by a user
+(define-read-only (get-user-contribution-ratio (user principal))
+  (let ((user-contribution (default-to u0 (map-get? user-funding-balance user))))
+    (ok (/ (* user-contribution u100) (var-get insurance-fund)))))
+
+;; Get the contract owner's address
+(define-read-only (get-owner-address)
+  (ok contract-owner))
+
+;; Get the total amount of funding in the insurance pool
+(define-read-only (get-total-funding-in-pool)
+  (ok (var-get insurance-fund)))
+
