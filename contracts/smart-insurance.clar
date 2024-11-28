@@ -191,6 +191,39 @@
     (var-set fund-limit new-limit)
     (ok true)))
 
+;; Allows the contract owner to withdraw excess funds from the pool
+(define-public (withdraw-excess-funds (amount uint))
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (>= (var-get insurance-fund) amount) err-not-enough-balance)
+    (var-set insurance-fund (- (var-get insurance-fund) amount))
+    (ok true)))
+
+;; Refunds the user's remaining funding balance.
+(define-public (refund-contribution (user principal))
+  (let ((balance (default-to u0 (map-get? user-funding-balance user))))
+    (begin
+      (asserts! (> balance u0) err-not-enough-balance)
+      (map-set user-funding-balance user u0)
+      (try! (stx-transfer? balance tx-sender user))
+      (ok true))))
+
+;; Toggles the pause state of the contract (Owner only).
+(define-data-var is-paused bool false)
+
+(define-public (toggle-pause)
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (var-set is-paused (not (var-get is-paused)))
+    (ok true)))
+
+;; Checks and validates a user's eligibility for purchasing a policy.
+(define-public (validate-policy-eligibility (user principal) (amount uint))
+  (let ((balance (default-to u0 (map-get? user-funding-balance user))))
+    (begin
+      (asserts! (>= balance amount) err-not-enough-balance)
+      (ok true))))
+
 ;; ================================
 ;; READ-ONLY FUNCTIONS
 ;; ================================
@@ -774,3 +807,70 @@
     (new-balance (- fund-balance claim-amount))
   )
     (ok {remaining-balance: new-balance, solvent: (>= new-balance u0)})))
+
+;; Returns true if the user's funding exceeds the maximum funding limit
+(define-read-only (is-user-over-funding-limit (user principal))
+  (let ((user-funding (default-to u0 (map-get? user-funding-balance user))))
+    (ok (> user-funding (var-get max-funding-per-user)))))
+
+;; Returns the payout amount for a specific user's policy
+(define-read-only (get-policy-payout (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (calculate-payout (get amount policy)))))
+
+;; Returns true if the pool can cover the specified payout
+(define-read-only (can-cover-payout? (amount uint))
+  (ok (>= (var-get insurance-fund) amount)))
+
+;; Returns true if the user has purchased insurance
+(define-read-only (has-user-purchased-insurance? (user principal))
+  (ok (is-some (map-get? insurance-policies {user: user}))))
+
+;; Returns true if the user is eligible for a payout
+(define-read-only (is-user-eligible-for-payout? (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get is-active policy))))
+
+;; Verifies if the user has enough balance to purchase insurance.
+(define-read-only (is-user-eligible (user principal) (amount uint))
+  (let ((user-balance (default-to u0 (map-get? user-funding-balance user))))
+    (ok (>= user-balance amount))))
+
+;; Calculates the payout amount for a user's active insurance policy.
+(define-read-only (estimate-payout (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (if (get is-active policy)
+          (calculate-payout (get amount policy))
+          u0))))
+
+;; Determines if a user's policy has expired.
+(define-read-only (is-policy-expired (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (not (get is-active policy)))))
+
+;; Validates if the pool balance can cover the specified payout amount.
+(define-read-only (is-pool-sufficient (amount uint))
+  (ok (>= (var-get insurance-fund) (calculate-payout amount))))
+
+;; Retrieves the total contribution a user has made to the pool.
+(define-read-only (get-user-contribution (user principal))
+  (ok (default-to u0 (map-get? user-funding-balance user))))
+
+;; Determine if the user can make a claim
+(define-read-only (is-eligible-for-claim? (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} 
+                                 (map-get? insurance-policies {user: user}))))
+    (ok (get is-active user-policy))))
+
+;; Calculate payout amount for a user based on their policy
+(define-read-only (get-potential-payout (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} 
+                                 (map-get? insurance-policies {user: user}))))
+    (ok (calculate-payout (get amount user-policy)))))
+
+;; Retrieve the maximum payout a user can claim based on their policy
+(define-read-only (get-user-max-payout (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} 
+                                 (map-get? insurance-policies {user: user}))))
+    (ok (calculate-payout (get amount user-policy)))))
+
