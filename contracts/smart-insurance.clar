@@ -167,6 +167,30 @@
     (map-set insurance-policies {user: tx-sender} {amount: amount, price: (var-get insurance-premium), is-active: true})
     (ok true)))
 
+;; Update the global fund limit (Owner only)
+(define-public (set-global-fund-limit (new-limit uint))
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (> new-limit u0) err-invalid-amount)
+    (var-set fund-limit new-limit)
+    (ok true)))
+
+;; Withdraw excess pool balance (Owner only)
+(define-public (withdraw-surplus (amount uint))
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (<= amount (var-get insurance-fund)) err-not-enough-balance)
+    (var-set insurance-fund (- (var-get insurance-fund) amount))
+    (ok true)))
+
+;; Update the overall insurance fund limit (Owner only)
+(define-public (update-fund-limit (new-limit uint))
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (> new-limit (var-get insurance-fund)) err-invalid-amount)
+    (var-set fund-limit new-limit)
+    (ok true)))
+
 ;; ================================
 ;; READ-ONLY FUNCTIONS
 ;; ================================
@@ -584,3 +608,70 @@
     (ok (if (not (get is-active policy))
             policy
             {amount: u0, price: u0, is-active: false}))))
+
+;; Get the total payout capacity of the pool
+(define-read-only (get-total-payout-capacity)
+  (ok (/ (var-get insurance-fund) (var-get insurance-premium))))
+
+;; Get the premium rate for a specific amount
+(define-read-only (calculate-premium-for-amount (amount uint))
+  (ok (/ (* amount (var-get insurance-premium)) u100)))
+
+;; Check if the user has any policy
+(define-read-only (has-any-policy? (user principal))
+  (ok (is-some (map-get? insurance-policies {user: user}))))
+
+;; Check the percentage of fund limit utilized
+(define-read-only (get-fund-utilization)
+  (let ((current-fund (var-get insurance-fund))
+        (limit (var-get fund-limit)))
+    (ok (/ (* current-fund u100) limit))))
+
+;; Get all policies associated with a user
+(define-read-only (get-user-policies (user principal))
+  (ok (map-get? insurance-policies {user: user})))
+
+;; Get the percentage of liquidity in the pool
+(define-read-only (get-pool-liquidity)
+  (let ((current-fund (var-get insurance-fund))
+        (limit (var-get fund-limit)))
+    (ok (- u100 (/ (* current-fund u100) limit)))))
+
+;; Calculate the maximum coverage a user can purchase based on their balance
+(define-read-only (get-max-coverage (user principal))
+  (let ((user-funding (default-to u0 (map-get? user-funding-balance user))))
+    (ok (/ user-funding (var-get insurance-premium)))))
+
+;; Estimate the cost of a policy for a given amount
+(define-read-only (get-policy-cost (amount uint))
+  (ok (calculate-payout amount)))
+
+;; Validate if a given amount can be used to purchase insurance
+(define-read-only (is-valid-policy-amount? (amount uint))
+  (ok (and (> amount u0) (<= amount (var-get max-funding-per-user)))))
+
+(define-read-only (get-total-user-policies (user principal))
+;; Returns the total insurance amount held by a user.
+(ok (default-to u0 (map-get? user-insurance-balance user))))
+
+(define-read-only (calculate-premium (amount uint))
+;; Calculates the premium for a given amount based on the current rate.
+(ok (/ (* amount (var-get insurance-premium)) u100)))
+
+(define-read-only (can-handle-payout? (amount uint))
+;; Determines if the insurance fund has enough balance for a specific payout.
+(ok (>= (var-get insurance-fund) (calculate-payout amount))))
+
+(define-read-only (get-funding-capacity)
+;; Returns the remaining capacity in the insurance pool.
+(ok (- (var-get fund-limit) (var-get insurance-fund))))
+
+(define-read-only (is-user-exceeding-funding-limit? (user principal) (amount uint))
+;; Checks if adding funds for a user exceeds the allowed limit.
+(ok (> (+ (default-to u0 (map-get? user-funding-balance user)) amount) 
+       (var-get max-funding-per-user))))
+
+(define-read-only (list-active-policies)
+;; Placeholder: Returns all active insurance policies.
+;; In a real implementation, this requires a map iteration, which Clarity lacks.
+(ok "List active policies functionality not supported in current Clarity version."))
