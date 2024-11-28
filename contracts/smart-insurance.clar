@@ -235,3 +235,38 @@
 (define-read-only (get-insurance-premium-rate)
   (ok (var-get insurance-premium)))
 
+;; Get the current contract version
+(define-read-only (get-contract-version)
+  (ok "v1.0.0"))
+
+;; Check if a user has an active insurance policy
+(define-read-only (has-active-policy? (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get is-active user-policy))))
+
+;; Get the user's insurance premium rate
+(define-read-only (get-user-premium-rate (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get price user-policy))))
+
+;; Check if a user has enough funding for insurance purchase
+(define-read-only (can-afford-insurance? (user principal) (amount uint))
+  (let ((user-funding (default-to u0 (map-get? user-funding-balance user))))
+    (ok (>= user-funding amount))))
+
+;; Get the total amount of claims paid out
+(define-read-only (get-total-claims-paid)
+  (ok (- (var-get insurance-fund) (var-get insurance-fund))))
+
+;; Check if a user's insurance policy is valid for a payout
+(define-read-only (can-payout? (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (and (get is-active user-policy) (>= (var-get insurance-fund) (calculate-payout (get amount user-policy)))))))
+
+;; Get the funding balance of a specific user
+(define-read-only (get-user-funding (user principal))
+  (ok (default-to u0 (map-get? user-funding-balance user))))
+
+;; Get the current fund balance available for payouts
+(define-read-only (get-available-payout-fund)
+  (ok (var-get insurance-fund)))
