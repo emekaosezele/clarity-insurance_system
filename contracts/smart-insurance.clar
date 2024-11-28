@@ -468,4 +468,43 @@
   (let ((user-insurance (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
     (ok (>= (get amount user-insurance) amount))))
 
+;; Get the remaining user funding available for contributions
+(define-read-only (get-remaining-user-funding (user principal))
+  (let ((user-funding (default-to u0 (map-get? user-funding-balance user))))
+    (ok (- (var-get max-funding-per-user) user-funding))))
 
+;; Check if the insurance pool balance is below the target funding limit
+(define-read-only (is-pool-below-target?)
+  (let ((current-balance (var-get insurance-fund)))
+    (ok (< current-balance (var-get fund-limit)))))
+
+;; Get the current maximum funding limit for the insurance pool
+(define-read-only (get-current-max-funding-limit)
+  (ok (var-get max-funding-per-user)))
+
+;; Check if the insurance fund has reached its limit
+(define-read-only (is-fund-limit-reached)
+  (ok (>= (var-get insurance-fund) (var-get fund-limit))))
+
+;; Check if a user's insurance balance is greater than zero
+(define-read-only (has-positive-insurance-balance (user principal))
+  (ok (> (default-to u0 (map-get? user-insurance-balance user)) u0)))
+
+;; Get the current status (active/inactive) of a user's insurance policy
+(define-read-only (get-user-insurance-status (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get is-active policy))))
+
+;; Check if the contract's insurance pool is fully funded
+(define-read-only (is-pool-fully-funded)
+  (ok (>= (var-get insurance-fund) (var-get fund-limit))))
+
+;; Get the total insurance premium paid by a user
+(define-read-only (get-user-premium-paid (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get price policy))))
+
+;; Check if a user can afford additional insurance based on their funding balance
+(define-read-only (can-user-afford-more-insurance? (user principal) (premium uint))
+  (let ((user-funding (default-to u0 (map-get? user-funding-balance user))))
+    (ok (>= user-funding premium))))
