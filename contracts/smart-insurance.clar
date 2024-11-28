@@ -426,3 +426,46 @@
 (define-read-only (get-total-funding-in-pool)
   (ok (var-get insurance-fund)))
 
+;; Check if the contract has reached its funding limit
+(define-read-only (is-funding-limit-reached)
+  (ok (>= (var-get insurance-fund) (var-get fund-limit))))
+
+;; Get the current funding status for a specific user
+(define-read-only (get-user-funding-status (user principal))
+  (let ((funding-balance (default-to u0 (map-get? user-funding-balance user))))
+    (ok funding-balance)))
+
+;; Get the total funding raised by the contract
+(define-read-only (get-total-funding)
+  (ok (var-get insurance-fund)))
+
+;; Check if a user has a claimable policy
+(define-read-only (can-claim-policy? (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get is-active user-policy))))
+
+;; Check if the insurance pool has enough balance for a specific payout
+(define-read-only (can-payout-insurance? (amount uint))
+  (let ((payout-amount (calculate-payout amount)))
+    (ok (>= (var-get insurance-fund) payout-amount))))
+
+;; Get the insurance fund balance after a specific payout
+(define-read-only (get-insurance-fund-after-payout (amount uint))
+  (let ((payout-amount (calculate-payout amount)))
+    (ok (- (var-get insurance-fund) payout-amount))))
+
+;; Check if a specific policy is active
+(define-read-only (is-policy-active? (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get is-active policy))))
+
+;; Get the total funding a specific user has contributed to the insurance pool
+(define-read-only (get-total-user-funding (user principal))
+  (ok (default-to u0 (map-get? user-funding-balance user))))
+
+;; Check if a user has enough balance for a specified insurance payout
+(define-read-only (has-enough-balance-for-payout? (user principal) (amount uint))
+  (let ((user-insurance (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (>= (get amount user-insurance) amount))))
+
+
