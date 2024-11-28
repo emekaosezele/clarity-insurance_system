@@ -675,3 +675,102 @@
 ;; Placeholder: Returns all active insurance policies.
 ;; In a real implementation, this requires a map iteration, which Clarity lacks.
 (ok "List active policies functionality not supported in current Clarity version."))
+
+(define-read-only (get-user-payout-potential (user principal))
+;; Calculates the maximum payout a user can receive from their policies.
+(let ((user-policy (default-to {amount: u0, price: u0, is-active: false} 
+                               (map-get? insurance-policies {user: user}))))
+  (ok (if (get is-active user-policy)
+         (calculate-payout (get amount user-policy))
+         u0))))
+
+(define-read-only (get-user-funding-percentage (user principal))
+;; Calculates the user's contribution percentage relative to the pool.
+(let ((user-balance (default-to u0 (map-get? user-funding-balance user)))
+      (pool-balance (var-get insurance-fund)))
+  (ok (if (> pool-balance u0)
+         (/ (* user-balance u100) pool-balance)
+         u0))))
+
+(define-read-only (can-owner-update? (parameter-name (string-ascii 32)))
+;; Always true for valid owner changes. Placeholder for extensibility.
+(ok (is-eq tx-sender contract-owner)))
+
+(define-read-only (get-pool-balance-after-user-payout (user principal))
+;; Returns the pool balance after a specific user's policy payout.
+(let ((user-policy (default-to {amount: u0, price: u0, is-active: false}
+                               (map-get? insurance-policies {user: user}))))
+  (ok (if (get is-active user-policy)
+         (- (var-get insurance-fund) (calculate-payout (get amount user-policy)))
+         (var-get insurance-fund)))))
+
+(define-read-only (is-premium-at-max? (max-premium uint))
+;; Determines if the insurance premium rate matches the specified maximum.
+(ok (>= (var-get insurance-premium) max-premium)))
+
+(define-read-only (get-insurance-fund-summary)
+;; Returns a summary of the insurance fund's current state.
+(ok {balance: (var-get insurance-fund),
+     limit: (var-get fund-limit),
+     remaining-capacity: (- (var-get fund-limit) (var-get insurance-fund))}))
+
+(define-read-only (get-total-active-users)
+;; Placeholder: Returns the count of active users.
+;; Real implementation would need additional tracking or iteration support.
+(ok "Active user count not supported in current Clarity version."))
+
+;; Calculate the expected payout for a given policy amount
+(define-read-only (calculate-expected-payout (amount uint))
+  (ok (/ (* amount (var-get insurance-premium)) u100)))
+
+;; Get the utilization rate of the insurance pool
+(define-read-only (get-pool-utilization-rate)
+  (let (
+    (total-funds (var-get insurance-fund))
+    (max-limit (var-get fund-limit))
+  )
+    (ok (/ (* total-funds u100) max-limit))))
+
+;; Check if a user is eligible to purchase insurance
+(define-read-only (is-eligible-for-insurance? (user principal))
+  (let (
+    (funding-balance (default-to u0 (map-get? user-funding-balance user)))
+    (max-limit (var-get max-funding-per-user))
+  )
+    (ok (< funding-balance max-limit))))
+
+;; Estimate the pool balance available for new policies
+(define-read-only (estimate-remaining-pool)
+  (ok (- (var-get insurance-fund) (* (var-get insurance-premium) u10))))
+
+;; Get metadata information about the contract
+(define-read-only (get-contract-metadata)
+  (ok {version: "1.0.0", owner: contract-owner}))
+
+;; Check if the funding balance is sufficient for a given policy purchase
+(define-read-only (is-funding-balance-sufficient? (user principal) (amount uint))
+  (let (
+    (funding-balance (default-to u0 (map-get? user-funding-balance user)))
+  )
+    (ok (>= funding-balance amount))))
+
+;; Check if the pool has enough funds to cover a potential claim
+(define-read-only (is-pool-solvent? (claim-amount uint))
+  (ok (>= (var-get insurance-fund) claim-amount)))
+
+;; Check if a user's policy is expired (example: based on is-active status)
+(define-read-only (is-policy-expired? (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (not (get is-active policy)))))
+
+;; Verify that the insurance premium is within a reasonable range
+(define-read-only (is-premium-valid? (premium uint))
+  (ok (and (> premium u0) (<= premium (var-get insurance-premium)))))
+
+;; Predict the impact of a specific claim on the pool
+(define-read-only (predict-claim-impact (claim-amount uint))
+  (let (
+    (fund-balance (var-get insurance-fund))
+    (new-balance (- fund-balance claim-amount))
+  )
+    (ok {remaining-balance: new-balance, solvent: (>= new-balance u0)})))
