@@ -344,3 +344,39 @@
         (max-fund (var-get fund-limit)))
     (ok {allocated: current-fund, total: max-fund, percentage: (/ (* current-fund u100) max-fund)})))
 
+(define-read-only (get-user-available-funding (user principal))
+  (let ((user-funding (default-to u0 (map-get? user-funding-balance user))))
+    (ok (- (var-get max-funding-per-user) user-funding))))
+
+(define-read-only (get-max-insurance-price)
+  (ok (var-get insurance-premium)))
+
+(define-read-only (user-has-valid-policy? (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get is-active user-policy))))
+
+(define-read-only (get-total-insurance-fund)
+  (ok (var-get insurance-fund)))
+
+;; Get the insurance premium rate for a specific user
+(define-read-only (get-user-insurance-rate (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get price policy))))
+
+;; Returns true if the insurance fund is below a certain threshold
+(define-read-only (is-fund-below-threshold (threshold uint))
+  (ok (< (var-get insurance-fund) threshold)))
+
+;; Returns how much a user can still claim based on their policy
+(define-read-only (get-claimable-amount (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (- (get amount policy) (get price policy)))))
+
+;; Returns true if the user has exceeded their funding limit
+(define-read-only (has-exceeded-funding-limit (user principal))
+  (ok (> (default-to u0 (map-get? user-funding-balance user)) (var-get max-funding-per-user))))
+
+;; Returns the total amount in the insurance fund
+(define-read-only (get-total-fund)
+  (ok (var-get insurance-fund)))
+
