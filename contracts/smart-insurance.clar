@@ -306,3 +306,41 @@
 (define-read-only (has-sufficient-insurance? (user principal) (amount uint))
   (let ((user-insurance (default-to u0 (map-get? user-insurance-balance user))))
     (ok (>= user-insurance amount))))
+
+;; Get the maximum insurance claim limit per user
+(define-read-only (get-max-insurance-claim-limit)
+  (ok (var-get max-funding-per-user)))
+
+;; Check if the insurance pool balance is above a specified threshold
+(define-read-only (is-fund-above-threshold (threshold uint))
+  (ok (> (var-get insurance-fund) threshold)))
+
+;; Check if a user has made a claim recently
+(define-read-only (has-user-claimed-recently? (user principal))
+  (let ((user-policy (map-get? insurance-policies {user: user})))
+    (ok (get is-active user-policy))))
+
+;; Get the list of contract owners (can be extended to multiple owners if needed)
+(define-read-only (get-contract-owners)
+  (ok (list contract-owner)))
+
+;; Get the insurance premium rate for a specific user
+(define-read-only (get-user-insurance-premium (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get price user-policy))))
+
+;; Check if a specific insurance policy exists for a user
+(define-read-only (does-policy-exist? (user principal))
+  (let ((user-policy (map-get? insurance-policies {user: user})))
+    (ok (is-none user-policy))))
+
+;; Get the contract's last modified date (a static date for simplicity in this example)
+(define-read-only (get-contract-last-modified)
+  (ok "2024-11-27"))
+
+;; Get the status of fund allocation (percentage of fund used)
+(define-read-only (get-fund-allocation-status)
+  (let ((current-fund (var-get insurance-fund))
+        (max-fund (var-get fund-limit)))
+    (ok {allocated: current-fund, total: max-fund, percentage: (/ (* current-fund u100) max-fund)})))
+
