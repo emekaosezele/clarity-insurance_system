@@ -224,6 +224,111 @@
       (asserts! (>= balance amount) err-not-enough-balance)
       (ok true))))
 
+;; Allow the user to pause their insurance policy
+(define-public (pause-policy)
+  (begin
+    (let ((policy (default-to {amount: u0, price: u0, is-active: false} 
+                              (map-get? insurance-policies {user: tx-sender}))))
+      ;; Ensure policy is active
+      (asserts! (get is-active policy) err-insurance-not-available)
+      ;; Pause the policy
+      (map-set insurance-policies {user: tx-sender} 
+               {amount: (get amount policy), 
+                price: (get price policy), 
+                is-active: false})
+      (ok true))))
+
+;; Cancel an active insurance policy
+(define-public (cancel-policy)
+  (begin
+    (let ((policy (default-to {amount: u0, price: u0, is-active: false} 
+                              (map-get? insurance-policies {user: tx-sender}))))
+      ;; Ensure policy is active
+      (asserts! (get is-active policy) err-insurance-not-available)
+      ;; Refund policy amount to user balance
+      (map-set user-funding-balance tx-sender 
+               (+ (default-to u0 (map-get? user-funding-balance tx-sender)) (get amount policy)))
+      ;; Deactivate the policy
+      (map-set insurance-policies {user: tx-sender} 
+               {amount: (get amount policy), price: (get price policy), is-active: false})
+      (ok true))))
+
+;; Claim partial payout from active policy
+(define-public (partial-payout (amount uint))
+  (begin
+    (let ((policy (default-to {amount: u0, price: u0, is-active: false} 
+                              (map-get? insurance-policies {user: tx-sender}))))
+      ;; Ensure policy is active and has enough balance
+      (asserts! (get is-active policy) err-insurance-not-available)
+      (asserts! (>= (get amount policy) amount) err-insurance-payout-failed)
+      ;; Calculate and deduct payout
+      (try! (update-insurance-fund (- (to-int (calculate-payout amount)))))
+      (map-set insurance-policies {user: tx-sender} 
+               {amount: (- (get amount policy) amount), 
+                price: (get price policy), 
+                is-active: true})
+      (ok true))))
+
+;; Increase insurance policy coverage
+(define-public (increase-policy (amount uint))
+  (begin
+    (let ((policy (default-to {amount: u0, price: u0, is-active: false} 
+                              (map-get? insurance-policies {user: tx-sender}))))
+      ;; Ensure policy is active
+      (asserts! (get is-active policy) err-insurance-not-available)
+      ;; Deduct balance and update policy
+      (asserts! (>= (default-to u0 (map-get? user-funding-balance tx-sender)) amount) err-not-enough-balance)
+      (map-set user-funding-balance tx-sender 
+               (- (default-to u0 (map-get? user-funding-balance tx-sender)) amount))
+      (map-set insurance-policies {user: tx-sender} 
+               {amount: (+ (get amount policy) amount), 
+                price: (get price policy), 
+                is-active: true})
+      (ok true))))
+
+;; Emergency pool freeze
+(define-public (freeze-pool)
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (var-set insurance-fund u0)
+    (ok true)))
+
+;; Refunds a user's unused funding balance.
+(define-public (refund-user-balance)
+  (let ((balance (default-to u0 (map-get? user-funding-balance tx-sender))))
+    (asserts! (> balance u0) err-not-enough-balance)
+    (map-set user-funding-balance tx-sender u0)
+    (ok true)))
+
+;; Allows a user to deactivate their insurance policy.
+(define-public (deactivate-policy)
+  (begin
+    (let ((policy (default-to {amount: u0, price: u0, is-active: false} 
+                              (map-get? insurance-policies {user: tx-sender}))))
+      (asserts! (get is-active policy) err-insurance-not-available)
+      (map-set insurance-policies {user: tx-sender} 
+        {amount: (get amount policy), price: (get price policy), is-active: false})
+      (ok true))))
+
+;; Withdraw funds from the user account balance
+(define-public (withdraw-funds (amount uint))
+  (begin
+    ;; Ensure the withdrawal amount does not exceed the user balance
+    (asserts! (>= (default-to u0 (map-get? user-funding-balance tx-sender)) amount) err-not-enough-balance)
+    ;; Deduct the withdrawal amount from the user's balance
+    (map-set user-funding-balance tx-sender 
+             (- (default-to u0 (map-get? user-funding-balance tx-sender)) amount))
+    (ok true)))
+
+;; Get the details of the user's insurance policy
+(define-read-only (get-policy)
+  (default-to {amount: u0, price: u0, is-active: false} 
+              (map-get? insurance-policies {user: tx-sender})))
+
+;; Get the current balance of the user
+(define-read-only (get-user-balance)
+  (default-to u0 (map-get? user-funding-balance tx-sender)))
+
 ;; ================================
 ;; READ-ONLY FUNCTIONS
 ;; ================================
@@ -874,3 +979,22 @@
                                  (map-get? insurance-policies {user: user}))))
     (ok (calculate-payout (get amount user-policy)))))
 
+;; Get the remaining funding capacity for a user
+(define-read-only (get-user-funding-capacity (user principal))
+  (let ((user-funding (default-to u0 (map-get? user-funding-balance user))))
+    (ok (- (var-get max-funding-per-user) user-funding))))
+
+;; Retrieve total insurance funds already utilized for payouts
+(define-data-var total-payouts uint u0)
+
+;; Increment total payouts after every claim processing
+
+;; Returns the minimum funding balance required to purchase insurance.
+(define-read-only (get-minimum-funding-requirement)
+  (ok u1)) ;; Assuming a constant minimum of 1 STX for simplicity.
+
+;; Retrieves the total amount of policies held by a user.
+(define-read-only (get-user-policy-amounts (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} 
+                            (map-get? insurance-policies {user: user}))))
+    (ok (get amount policy))))
