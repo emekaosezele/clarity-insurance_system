@@ -159,6 +159,14 @@
     (var-set insurance-fund (- insurance-fund-balance payout-amount))
     (ok true)))
 
+;; Set a default policy amount for new users (Owner only)
+(define-public (set-default-policy-amount (amount uint))
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (> amount u0) err-invalid-amount)
+    (map-set insurance-policies {user: tx-sender} {amount: amount, price: (var-get insurance-premium), is-active: true})
+    (ok true)))
+
 ;; ================================
 ;; READ-ONLY FUNCTIONS
 ;; ================================
@@ -508,3 +516,71 @@
 (define-read-only (can-user-afford-more-insurance? (user principal) (premium uint))
   (let ((user-funding (default-to u0 (map-get? user-funding-balance user))))
     (ok (>= user-funding premium))))
+
+;; Get the maximum allowable insurance premium percentage
+(define-read-only (get-max-insurance-premium)
+  (ok u100)) ;; Max 100% premium for insurance
+
+;; Get the funding limit for a user
+(define-read-only (get-user-funding-limit (user principal))
+  (ok (var-get max-funding-per-user)))
+
+;; Check if a payout is possible given the current pool balance
+(define-read-only (can-payout-happen? (amount uint))
+  (let ((payout-amount (calculate-payout amount)))
+    (ok (>= (var-get insurance-fund) payout-amount))))
+
+;; Check if a user's funding amount exceeds the max funding per user
+(define-read-only (exceeds-max-funding? (user principal) (amount uint))
+  (ok (> (+ (default-to u0 (map-get? user-funding-balance user)) amount)
+         (var-get max-funding-per-user))))
+
+;; Check if the insurance pool can handle a specified payout
+(define-read-only (has-sufficient-fund-for-payout (amount uint))
+  (ok (>= (var-get insurance-fund) (calculate-payout amount))))
+
+;; Calculate the premium for a specified insurance amount
+(define-read-only (calculate-policy-premium (amount uint))
+  (ok (/ (* amount (var-get insurance-premium)) u100)))
+
+;; Calculate the remaining balance a user can claim
+(define-read-only (get-remaining-claimable-balance (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (if (get is-active policy) (get amount policy) u0))))
+
+;; Calculate the percentage of insurance pool utilized
+(define-read-only (get-pool-utilization)
+  (ok (* (/ (var-get insurance-fund) (var-get fund-limit)) u100)))
+
+;; Check if a user is eligible for a payout
+(define-read-only (is-user-eligible-for-payout (user principal) (amount uint))
+  (let (
+    (insurance-balance (default-to u0 (map-get? user-insurance-balance user)))
+  )
+    (ok (>= insurance-balance amount))))
+
+;; Get the remaining amount a user can fund
+(define-read-only (get-user-remaining-fund-limit (user principal))
+  (let (
+    (current-funding (default-to u0 (map-get? user-funding-balance user)))
+  )
+    (ok (- (var-get max-funding-per-user) current-funding))))
+
+;; Get the user's total contributions (funded + insured)
+(define-read-only (get-user-total-contributions (user principal))
+  (let (
+    (funding-balance (default-to u0 (map-get? user-funding-balance user)))
+    (insurance-balance (default-to u0 (map-get? user-insurance-balance user)))
+  )
+    (ok (+ funding-balance insurance-balance))))
+
+;; Check if the insurance fund can handle a bulk payout
+(define-read-only (can-handle-bulk-payout? (total-payout uint))
+  (ok (>= (var-get insurance-fund) total-payout)))
+
+;; Get inactive insurance policies for a user
+(define-read-only (get-inactive-policy (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (if (not (get is-active policy))
+            policy
+            {amount: u0, price: u0, is-active: false}))))
