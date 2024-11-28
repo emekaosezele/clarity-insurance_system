@@ -186,3 +186,52 @@
 ;; Get the overall funding limit of the insurance pool
 (define-read-only (get-fund-limit)
   (ok (var-get fund-limit)))
+
+;; Get the insurance policy details of a user
+(define-read-only (get-policy-status (user principal))
+  (let ((policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok policy)))
+
+;; Get the contract owner
+(define-read-only (get-contract-owner)
+  (ok contract-owner))
+
+;; Get the user's insurance policy status
+(define-read-only (get-user-policy-status (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok (get is-active user-policy))))
+
+;; Get the user's insurance policy details
+(define-read-only (get-user-policy-details (user principal))
+  (let ((user-policy (default-to {amount: u0, price: u0, is-active: false} (map-get? insurance-policies {user: user}))))
+    (ok user-policy)))
+
+;; Get the user's funding balance
+(define-read-only (get-user-funding-balance (user principal))
+  (ok (default-to u0 (map-get? user-funding-balance user))))
+
+;; Check if the insurance premium is valid (greater than zero)
+(define-read-only (is-valid-insurance-premium)
+  (ok (> (var-get insurance-premium) u0)))
+
+;; Get the total balance of the insurance pool
+(define-read-only (get-total-insurance-pool)
+  (ok (var-get insurance-fund)))
+
+;; Get remaining pool balance after a potential payout
+(define-read-only (get-remaining-pool-after-payout (amount uint))
+  (let ((payout-amount (calculate-payout amount)))
+    (ok (- (var-get insurance-fund) payout-amount))))
+
+;; Get the maximum allowed funding per user
+(define-read-only (get-user-max-funding (user principal))
+  (ok (var-get max-funding-per-user)))
+
+;; Get available fund balance for claims
+(define-read-only (get-available-fund-for-claims)
+  (ok (var-get insurance-fund)))
+
+;; Get the current insurance premium rate
+(define-read-only (get-insurance-premium-rate)
+  (ok (var-get insurance-premium)))
+
